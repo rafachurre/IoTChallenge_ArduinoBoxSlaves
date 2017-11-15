@@ -10,12 +10,17 @@ Features:
 4. i2c communication enabled. Preapred to receive certain codes to perform some actions
 
 **MESSAGES MAPPING**
-> i2c can send numbers from 0 to 255 in its simplest implementation
-> the constants below are a collection of messages for the communication between Master <-> Slave
-> Slaves (Arduinos) are always pasive. They don't insert data into the BUS unless Master calls for it
-> If Master sends an ACTION code, the slave will execute certain action in the actuators
-> If Master wants to read some data, it needs to send a DATA_REQUEST code first. This will prepare the data to be sent in the Arduino, and then Master can read() the bus in the Slave's address to get the data.
-> The data send from the Slave will be one of the SLAVE_STATUS messages
+> i2c can send numbers from 0 to 255 in its simplest implementation. 
+
+> The constants below are a collection of messages for the communication between Master <-> Slave. 
+
+> Slaves (Arduinos) are always pasive. They don't insert data into the BUS unless Master calls for it. 
+
+> If Master sends an ACTION code, the slave will execute certain action in the actuators. 
+
+> If Master wants to read some data, it needs to send a DATA_REQUEST code first. This will prepare the data to be sent in the Arduino, and then Master can read() the bus in the Slave's address to get the data. 
+
+> The data send from the Slave will be one of the SLAVE_STATUS messages.
 
 SLAVE_STATUS_BOX_OPEN 1 //The box is open
 SLAVE_STATUS_BOX_CLOSED 2 //The box is closed
