@@ -69,7 +69,7 @@ Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS
 //-------------------------
 //i2c communication
 int code_received = 0; //saves the code reviced via i2c
-int code_toSend = 0; //saves the code to be send when requested via i2c
+int code_toSend = NO_DATA_REQUEST_RECEIVED_PREVIOUSLY; //saves the code to be send when requested via i2c
 int code_previousCodeReceived = 0; //saves the previous code reviced via i2c
 
 //status variables
