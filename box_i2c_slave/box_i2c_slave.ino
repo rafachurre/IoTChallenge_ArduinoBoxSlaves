@@ -18,9 +18,10 @@
 #define SLAVE_STATUS_LED_OFF 8
 #define SLAVE_STATUS_LED_BLINKINGOFF_UNKNOWN 9
 
-#define DATA_REQUEST_LAST_CODE_RECEIVED 50
-#define DATA_REQUEST_STATUS_OPENCLOSE 51
-#define DATA_REQUEST_STATUS_EMPTYFULL 52
+#define NO_DATA_REQUEST_RECEIVED_PREVIOUSLY 50
+#define DATA_REQUEST_LAST_CODE_RECEIVED 51
+#define DATA_REQUEST_STATUS_OPENCLOSE 52
+#define DATA_REQUEST_STATUS_EMPTYFULL 53
 
 #define ACTION_REQUEST_OPEN_BOX 100
 #define ACTION_REQUEST_CLOSE_BOX 101
@@ -191,6 +192,8 @@ void receiveData(int byteCount){
 // callback for sending data
 void sendData(){
   Wire.write(code_toSend);
+  //clean the "code_toSend" variable after send it
+  code_toSend = NO_DATA_REQUEST_RECEIVED_PREVIOUSLY;
 }
 
 //process the code received from the Master and executes the corresponding functions
