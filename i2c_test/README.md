@@ -1,4 +1,4 @@
-#IoTChallenge_ArduinoBoxSlaves
+# IoTChallenge_ArduinoBoxSlaves
 
 ### 1. i2c_test
 Simple example to test i2c communication. 
