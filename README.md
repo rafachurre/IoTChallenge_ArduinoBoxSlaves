@@ -45,6 +45,7 @@ Features:
 
 
 **TEST MODE**
+
 The code is prepare to simulate the i2c connection with Serial inputs. To use this test mode:<br>
 1. Uncomment the code in the loop()
 ```
