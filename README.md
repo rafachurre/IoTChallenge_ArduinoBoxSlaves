@@ -32,7 +32,7 @@ Features:
 <br> *SLAVE_STATUS_LED_OFF* **8** //The LED is off
 <br> *SLAVE_STATUS_LED_BLINKINGOFF_UNKNOWN* **9** //It is not clear if the LED is blinking or off (error handling)
 
-<br> *NO_DATA_REQUEST_RECEIVED_PREVIOUSLY* **50** //Return message when Master reads without writing a DATA_REQUEST message before
+<br> *SLAVE_STATUS_NO_DATA_REQUEST_RECEIVED_PREVIOUSLY* **50** //Return message when Master reads without writing a DATA_REQUEST message before
 <br> *DATA_REQUEST_LAST_CODE_RECEIVED* **51** //Master wants to read() the previous code received. Prepare "to_send" variable for a read event
 <br> *DATA_REQUEST_STATUS_OPENCLOSE* **52** //Master wants to read() the open/close status. Prepare "to_send" variable for a read event
 <br> *DATA_REQUEST_STATUS_EMPTYFULL* **53** //Master wants to read() the empty/full status. Prepare "to_send" variable for a read event
