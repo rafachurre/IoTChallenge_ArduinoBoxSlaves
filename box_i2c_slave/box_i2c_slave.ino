@@ -18,7 +18,7 @@
 #define SLAVE_STATUS_LED_OFF 8
 #define SLAVE_STATUS_LED_BLINKINGOFF_UNKNOWN 9
 
-#define NO_DATA_REQUEST_RECEIVED_PREVIOUSLY 50
+#define SLAVE_STATUS_NO_DATA_REQUEST_RECEIVED_PREVIOUSLY 50
 #define DATA_REQUEST_LAST_CODE_RECEIVED 51
 #define DATA_REQUEST_STATUS_OPENCLOSE 52
 #define DATA_REQUEST_STATUS_EMPTYFULL 53
@@ -69,7 +69,7 @@ Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS
 //-------------------------
 //i2c communication
 int code_received = 0; //saves the code reviced via i2c
-int code_toSend = NO_DATA_REQUEST_RECEIVED_PREVIOUSLY; //saves the code to be send when requested via i2c
+int code_toSend = SLAVE_STATUS_NO_DATA_REQUEST_RECEIVED_PREVIOUSLY; //saves the code to be send when requested via i2c
 int code_previousCodeReceived = 0; //saves the previous code reviced via i2c
 
 //status variables
@@ -193,7 +193,7 @@ void receiveData(int byteCount){
 void sendData(){
   Wire.write(code_toSend);
   //clean the "code_toSend" variable after send it
-  code_toSend = NO_DATA_REQUEST_RECEIVED_PREVIOUSLY;
+  code_toSend = SLAVE_STATUS_NO_DATA_REQUEST_RECEIVED_PREVIOUSLY;
 }
 
 //process the code received from the Master and executes the corresponding functions
