@@ -8,6 +8,7 @@
 //-----------------
 //i2c can send numbers from 0 to 255 in its simplest implementation
 //the constants below are a collection of messages for the communication between Master <-> Slave
+#define SLAVE_NO_BUFFER_DATA 0
 #define SLAVE_STATUS_BOX_OPEN 1
 #define SLAVE_STATUS_BOX_CLOSED 2
 #define SLAVE_STATUS_BOX_OPENCLOSED_UNKNOWN 3
@@ -18,36 +19,44 @@
 #define SLAVE_STATUS_LED_OFF 8
 #define SLAVE_STATUS_LED_BLINKINGOFF_UNKNOWN 9
 
-#define SLAVE_STATUS_NO_DATA_REQUEST_RECEIVED_PREVIOUSLY 50
-#define DATA_REQUEST_LAST_CODE_RECEIVED 51
+#define DATA_REQUEST_STATUS_BUFFER_INDEX 50
+#define DATA_REQUEST_GET_ALL_STATUSES 51
 #define DATA_REQUEST_STATUS_OPENCLOSE 52
 #define DATA_REQUEST_STATUS_EMPTYFULL 53
+#define DATA_REQUEST_STATUS_LEDSTATUS 54
 
-#define ACTION_REQUEST_OPEN_BOX 100
-#define ACTION_REQUEST_CLOSE_BOX 101
-#define ACTION_REQUEST_BLINK_LED 102
-#define ACTION_REQUEST_TURN_OFF_LED 103
-#define ACTION_REQUEST_SET_KEYPAD_PWD 104
+#define ACTION_REQUEST_OPEN_BOX 75
+#define ACTION_REQUEST_CLOSE_BOX 76
+#define ACTION_REQUEST_BLINK_LED 77
+#define ACTION_REQUEST_TURN_OFF_LED 78
+#define ACTION_REQUEST_SET_KEYPAD_PWD 79
 
 //i2c CONFIG
 //-----------
-#define SLAVE_ADDRESS 0x04
+#define SLAVE_ADDRESS 0x05
+
+//LED CONFIG
+//-----------
+#define LEDPin 17
+#define LED_BLINK_PERIOD 20 // number of loops before changing the LED state. Each loop needs 50ms.
+#define NUMBER_OF_BLINKS 5 // Number of times the LED turns on during the blinking phase
 
 //Servo CONFIG
 //-------------
-#define servoPin 10 //Pin 10 to control the servo
+#define servoPin 16 //Pin 16 to control the servo
 //Create a Servo instance
 Servo servoMotor;
 
 //Ultrasonic Sensors HC-SR04 CONFIG
 //----------------------------------
-#define echoPinA 11 // Echo PinA
-#define trigPinA 12 // Trigger PinA
+#define echoPinA 3 // Echo PinA
+#define trigPinA 4 // Trigger PinA
 #define echoPinB 14 // Echo PinB
 #define trigPinB 15 // Trigger PinB
 #define numberOfSensors 2 // Number of sensors per Arduino
 #define maximumRange 40 // Maximum range needed
 #define minimumRange 0 // Minimum range needed
+#define emptyThreshold 6 // Opposite wall distance. Cannot be an object further than this distance.
 
 //Keypad CONFIG
 //--------------
@@ -60,21 +69,32 @@ char hexaKeys[ROWS][COLS] = {
   {'7','8','9','C'},
   {'*','0','#','D'}
 };
-byte rowPins[ROWS] = {2, 3, 4, 5}; //connect to the row pinouts of the keypad
-byte colPins[COLS] = {6, 7, 8, 9}; //connect to the column pinouts of the keypad
+byte rowPins[ROWS] = {5, 6, 7, 8}; //connect to the row pinouts of the keypad
+byte colPins[COLS] = {9, 10, 11, 12}; //connect to the column pinouts of the keypad
 //initialize an instance of class NewKeypad and Servo
 Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 
 //Runtime global variables
 //-------------------------
+//status variables
+#define STATUS_CHANGED_BUFFER_MAX_LENGTH 50 // Max lenght of the buffer
+int status_changed_Buffer[STATUS_CHANGED_BUFFER_MAX_LENGTH];
+int status_changed_buffer_index = 0;
+
+int status_OpenClose = SLAVE_STATUS_BOX_CLOSED; // SLAVE_STATUS_BOX_CLOSED || SLAVE_STATUS_BOX_OPEN || SLAVE_STATUS_BOX_OPENCLOSED_UNKNOWN
+int status_EmptyFull = SLAVE_STATUS_BOX_EMPTY; // SLAVE_STATUS_BOX_EMPTY || SLAVE_STATUS_BOX_FULL || SLAVE_STATUS_BOX_EMPTYFULL_UNKNOWN
+int status_LED = SLAVE_STATUS_LED_OFF; // SLAVE_STATUS_LED_BLINKING || SLAVE_STATUS_LED_OFF || SLAVE_STATUS_LED_BLINKINGOFF_UNKNOWN
+
 //i2c communication
 int code_received = 0; //saves the code reviced via i2c
-int code_toSend = SLAVE_STATUS_NO_DATA_REQUEST_RECEIVED_PREVIOUSLY; //saves the code to be send when requested via i2c
+int code_toSend = SLAVE_NO_BUFFER_DATA; //saves the code to be send when requested via i2c
 int code_previousCodeReceived = 0; //saves the previous code reviced via i2c
 
-//status variables
-int status_OpenClose = SLAVE_STATUS_BOX_CLOSED; // SLAVE_STATUS_BOX_CLOSED || SLAVE_STATUS_BOX_OPEN
-int status_EmptyFull = SLAVE_STATUS_BOX_EMPTY; // SLAVE_STATUS_BOX_EMPTY || SLAVE_STATUS_BOX_FULL
+//LED variables
+int blinkingCounter = 0;
+int blinkPeriodCounter = 0;
+bool ledIsBlinking = false;
+int ledCurrentStatus = 0; // 0 = LOW / 1 = HIGH
 
 //password variables
 bool waitingForPwd = false;
@@ -94,6 +114,11 @@ bool pending_closeDoor = false;
 bool pending_blinkLed = false;
 bool pending_turnOffLed = false;
 
+//Debugging global variables
+//-------------------------
+int serialPrintFrequency = 20; //Number of loops before printing in the Serial console. Each loop = 50ms
+int serialPrintCounter = 0;
+
 
 //Lifecycle Function
 //-------------------
@@ -108,6 +133,10 @@ void setup() {
   // define callbacks for i2c communication
   Wire.onReceive(receiveData);
   Wire.onRequest(sendData);
+  
+  //LED SETUP
+  //------------
+  pinMode(LEDPin, OUTPUT);
   
   //Servo SETUP
   //------------
@@ -126,6 +155,9 @@ void setup() {
 
 //Loop
 void loop() {
+  //Blink LED routine
+  blinkLed();
+  //Check if the box is empty or full
   checkEmptyFull();
   //CheckKeypad
   checkKeypad();
@@ -136,7 +168,7 @@ void loop() {
 
   /*
    * UNCOMMENT to enable SerialTesting
-   * 
+   *
   //----------------------------------------
   //TEST: Wire simulation with Serial input
   //----------------------------------------
@@ -144,19 +176,62 @@ void loop() {
   if (Serial.available() > 0) {
     // read the incoming byte:
     code_received = Serial.read();
-    processReceivedCode();
-  
+    
     // say what you got:
     Serial.print("I received: ");
     Serial.println(code_received);
+    
+    processReceivedCode();
 
     int readRequestSimulationCode = 125;
     if(code_received == readRequestSimulationCode){
+      if (status_changed_buffer_index > 0){
+        code_toSend = popFromStatusBuffer();
+      }
+      else{
+        code_toSend = SLAVE_NO_BUFFER_DATA;
+      }
       Serial.println(code_toSend);
     }
   }
+  
+  if(serialPrintCounter >= serialPrintFrequency){
+    serialPrintCounter = 0;
+    //Log status in serial console
+    Serial.print("Distance: ");
+    Serial.println(boxContentDistance);
+    Serial.print("Status OpenClose: ");
+    if(status_OpenClose == SLAVE_STATUS_BOX_CLOSED){
+      Serial.println("CLOSED");
+    } else if(status_OpenClose == SLAVE_STATUS_BOX_OPEN){
+      Serial.println("OPEN");
+    } else {
+      Serial.print("UNKNOWN: ");
+      Serial.println(status_OpenClose);
+    } 
+    Serial.print("Status EmptyFull: ");
+    if(status_EmptyFull == SLAVE_STATUS_BOX_EMPTY){
+      Serial.println("EMPTY");
+    } else if(status_EmptyFull == SLAVE_STATUS_BOX_FULL){
+      Serial.println("FULL");
+    } else {
+      Serial.print("UNKNOWN: ");
+      Serial.println(status_EmptyFull);
+    } 
+    Serial.print("Status LED: ");
+    if(ledIsBlinking){
+      Serial.println("BLINKING");
+    } else {
+      Serial.println("OFF");
+    }
+  } else {
+    serialPrintCounter += 1;
+  }
   */
 }
+
+//Runtime Functions
+//------------------
 
 //resolve all pending actions based on variables
 void resolvePendingActions(){
@@ -164,19 +239,50 @@ void resolvePendingActions(){
   if(pending_openDoor){
     openDoor();
     pending_openDoor = false;
+    status_OpenClose = SLAVE_STATUS_BOX_OPEN;
+    pushStatusToBuffer(status_OpenClose);
   }
   if(pending_closeDoor){
     closeDoor();
     pending_closeDoor = false;
+    status_OpenClose = SLAVE_STATUS_BOX_CLOSED;
+    pushStatusToBuffer(status_OpenClose);
   }
   if(pending_blinkLed){
     //TODO: BlinkLed() call
+    blinkingCounter = 0;
+    ledIsBlinking = true;
     pending_blinkLed = false;
+    status_LED = SLAVE_STATUS_LED_BLINKING;
+    pushStatusToBuffer(status_LED);
   }
   if(pending_turnOffLed){
     //TODO: TurnOffLed() call
+    turnOffLed();
     pending_turnOffLed = false;
+    status_LED = SLAVE_STATUS_LED_OFF;
+    pushStatusToBuffer(status_LED);
   }
+}
+
+//pop the next value in the status changed
+int popFromStatusBuffer(){
+  status_changed_buffer_index -= 1;
+  int value = status_changed_Buffer[status_changed_buffer_index];
+  Serial.print("Value poped in buffer[");
+  Serial.print(status_changed_buffer_index);
+  Serial.print("]: ");
+  Serial.println(value);
+  return value;
+}
+
+void pushStatusToBuffer(int value){
+  status_changed_Buffer[status_changed_buffer_index] = value;
+  Serial.print("Value pushed in buffer[");
+  Serial.print(status_changed_buffer_index);
+  Serial.print("]: ");
+  Serial.println(value);
+  status_changed_buffer_index += 1;
 }
 
 //i2c slave send/reveive callbacks
@@ -191,9 +297,13 @@ void receiveData(int byteCount){
 
 // callback for sending data
 void sendData(){
+  if (status_changed_buffer_index > 0){
+    code_toSend = popFromStatusBuffer();
+  }
+  else{
+    code_toSend = SLAVE_NO_BUFFER_DATA;
+  }
   Wire.write(code_toSend);
-  //clean the "code_toSend" variable after send it
-  code_toSend = SLAVE_STATUS_NO_DATA_REQUEST_RECEIVED_PREVIOUSLY;
 }
 
 //process the code received from the Master and executes the corresponding functions
@@ -201,35 +311,47 @@ void processReceivedCode(){
   //If Arduino is waiting for password code, then set the received code as new password
   if(waitingForPwd){
     setNewPassword();
+    waitingForPwd = false;
   }
+
   else{
-    if(code_received == DATA_REQUEST_STATUS_OPENCLOSE){
+    if(code_received == DATA_REQUEST_STATUS_BUFFER_INDEX){
+      pushStatusToBuffer(status_changed_buffer_index); // push the index to the buffer, to be read in the next i2c_Read()
+    }
+    else if(code_received == DATA_REQUEST_GET_ALL_STATUSES){
+      //Prepare all statuses to be read
+      pushStatusToBuffer(status_OpenClose);
+      pushStatusToBuffer(status_EmptyFull);
+      pushStatusToBuffer(status_LED);
+    }
+    else if(code_received == DATA_REQUEST_STATUS_OPENCLOSE){
       //prepare variable to return the current Open/Close status
-      code_toSend = status_OpenClose;
+      pushStatusToBuffer(status_OpenClose);
     }
     else if(code_received == DATA_REQUEST_STATUS_EMPTYFULL){
       //prepare variable to return the current Empty/Full status
-      code_toSend = status_EmptyFull;
+      pushStatusToBuffer(status_EmptyFull);
     }
-    else if(code_received == DATA_REQUEST_LAST_CODE_RECEIVED){
-      //prepare variable to return the previous code received
-      code_toSend = code_previousCodeReceived;
+    else if(code_received == DATA_REQUEST_STATUS_LEDSTATUS){
+      //prepare variable to return the current LED status
+      pushStatusToBuffer(status_LED);
     }
     else if(code_received == ACTION_REQUEST_OPEN_BOX){
       //Open door
-      openDoor();
+      pending_openDoor = true;
+      pending_turnOffLed = true;
     }
     else if(code_received == ACTION_REQUEST_CLOSE_BOX){
       //Close door
-      closeDoor();
+      pending_closeDoor = true;
     }
     else if(code_received == ACTION_REQUEST_BLINK_LED){
       //Turn on LED --> blinking
-      //TODO
+      pending_blinkLed = true;
     }
     else if(code_received == ACTION_REQUEST_TURN_OFF_LED){
       //Turn off LED
-      //TODO
+      pending_turnOffLed = true;
     }
     else if(code_received == ACTION_REQUEST_SET_KEYPAD_PWD){
       waitingForPwd = true;
@@ -240,13 +362,75 @@ void processReceivedCode(){
   code_previousCodeReceived = code_received;
 }
 
+//LED functions
+//------------------------------
+void blinkLed(){
+  if(ledIsBlinking){
+    if(blinkingCounter < NUMBER_OF_BLINKS){
+      if(blinkPeriodCounter < LED_BLINK_PERIOD){
+        blinkPeriodCounter += 1;
+      }
+      else{
+        blinkPeriodCounter = 0;
+        if(ledCurrentStatus == 0){
+          ledCurrentStatus = 1;
+          digitalWrite(LEDPin, HIGH);
+        }
+        else {
+          ledCurrentStatus = 0;
+          blinkingCounter += 1;
+          digitalWrite(LEDPin, LOW);
+        }
+      }
+    }
+    else {
+      blinkingCounter = 0;
+      ledIsBlinking = false;
+      pending_turnOffLed = true;
+    }
+  }
+}
+
+void turnOffLed(){
+  ledIsBlinking = false;
+  blinkPeriodCounter = 0;
+  ledCurrentStatus = 0;
+  digitalWrite(LEDPin, LOW);
+}
+
 //Password functions
 //------------------------------
 void setNewPassword(){
   password = code_received; //TODO: password is type 'char'. code_received is type 'int'. check it is correct
   Serial.print("New password set: ");
   Serial.println(password);
-  waitingForPwd = false;
+}
+
+//Keyboard functions
+//--------------------
+//Read key if keaypad was used
+void checkKeypad(){
+  char keyPressed = customKeypad.getKey();
+  
+  if (keyPressed){
+    if(keyPressed == '*'){
+      if(inputPwd == password){
+        pending_openDoor = true;
+      }
+      else if(status_OpenClose == SLAVE_STATUS_BOX_OPEN){
+        pending_closeDoor= true;
+      }
+      Serial.print("password: ");
+      Serial.println(inputPwd);
+      inputPwd = "";
+    }
+    else {
+      if(status_OpenClose == SLAVE_STATUS_BOX_OPEN){
+        pending_closeDoor = true;
+      }
+      inputPwd += keyPressed;
+    }
+  }
 }
 
 //Empty/Full sensors functions
@@ -279,7 +463,7 @@ void distanceSensorCheck(int trigPin, int echoPin){
   }
   else {
     /* Send the distance to the computer using Serial protocol */
-    if(boxContentDistance < 30){
+    if(boxContentDistance < emptyThreshold){
       status_EmptyFull = SLAVE_STATUS_BOX_FULL;
       emptySignalCounter = 0; // if one sensor detects an object -> 0
     }
@@ -302,41 +486,14 @@ void lostEchoCheck(int echoPin){
   lostEchoCounter += 1;
   if(lostEchoCounter > 10){
     pinMode(echoPin, OUTPUT);
-    delay(50);
+    delay(10);
     digitalWrite(echoPin, LOW);
-    delay(50);
+    delay(10);
     pinMode(echoPin, INPUT);
     //reset counter
     lostEchoCounter = 0;
     //set Empty/Full status to Unknown
     status_EmptyFull = SLAVE_STATUS_BOX_EMPTYFULL_UNKNOWN;
-  }
-}
-
-//Keyboard functions
-//--------------------
-//Read key if keaypad was used
-void checkKeypad(){
-  char keyPressed = customKeypad.getKey();
-  
-  if (keyPressed){
-    if(keyPressed == '*'){
-      if(inputPwd == password){
-        openDoor();
-      }
-      else if(status_OpenClose == SLAVE_STATUS_BOX_OPEN){
-        closeDoor();
-      }
-      Serial.print("password: ");
-      Serial.println(inputPwd);
-      inputPwd = "";
-    }
-    else {
-      if(status_OpenClose == SLAVE_STATUS_BOX_OPEN){
-        closeDoor();
-      }
-      inputPwd += keyPressed;
-    }
   }
 }
 
@@ -346,16 +503,14 @@ void checkKeypad(){
 void openDoor(){
   for (int i=90; i>0; i--){
     servoMotor.write(i);
-    delay(10);
+    delay(5);
   }
-  status_OpenClose = SLAVE_STATUS_BOX_OPEN;
 }
 
 //activate servo to close door
 void closeDoor(){
   for (int i=0; i<90; i++){
     servoMotor.write(i);
-    delay(10);
+    delay(5);
   }
-  status_OpenClose = SLAVE_STATUS_BOX_CLOSED;
 }

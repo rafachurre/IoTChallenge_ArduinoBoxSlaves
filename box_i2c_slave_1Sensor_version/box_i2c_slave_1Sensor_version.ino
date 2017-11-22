@@ -158,7 +158,7 @@ void loop() {
   //Blink LED routine
   blinkLed();
   //Check if the box is empty or full
-  //checkEmptyFull();
+  checkEmptyFull();
   //CheckKeypad
   checkKeypad();
   //Resolve Pending Actions (if any)
