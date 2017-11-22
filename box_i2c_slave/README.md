@@ -21,6 +21,9 @@ Features:
 > If Master wants to read some data, it needs to send a DATA_REQUEST code first. This will prepare the data to be sent in the Arduino, and then Master can read() the bus in the Slave's address to get the data. 
 
 > The data send from the Slave will be one of the SLAVE_STATUS messages.
+
+*LIST OF MESSAGES*
+
 ```
 #define SLAVE_NO_BUFFER_DATA 0
 #define SLAVE_STATUS_BOX_OPEN 1
