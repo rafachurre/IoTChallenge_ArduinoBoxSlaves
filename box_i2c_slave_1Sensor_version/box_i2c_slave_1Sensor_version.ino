@@ -25,6 +25,7 @@
 #define DATA_REQUEST_STATUS_EMPTYFULL 53
 #define DATA_REQUEST_STATUS_LEDSTATUS 54
 
+#define ACTION_REQUEST_CLEAR_STATUS_BUFFER 74
 #define ACTION_REQUEST_OPEN_BOX 75
 #define ACTION_REQUEST_CLOSE_BOX 76
 #define ACTION_REQUEST_BLINK_LED 77
@@ -265,6 +266,10 @@ void resolvePendingActions(){
   }
 }
 
+void clearStatusBuffer(){
+  status_changed_buffer_index = 0;
+}
+
 //pop the next value in the status changed
 int popFromStatusBuffer(){
   status_changed_buffer_index -= 1;
@@ -315,7 +320,10 @@ void processReceivedCode(){
   }
 
   else{
-    if(code_received == DATA_REQUEST_STATUS_BUFFER_INDEX){
+    if(code_received == ACTION_REQUEST_CLEAR_STATUS_BUFFER){
+      clearStatusBuffer(); // delete all entries in status buffer
+    }
+    else if(code_received == DATA_REQUEST_STATUS_BUFFER_INDEX){
       pushStatusToBuffer(status_changed_buffer_index); // push the index to the buffer, to be read in the next i2c_Read()
     }
     else if(code_received == DATA_REQUEST_GET_ALL_STATUSES){
