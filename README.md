@@ -18,9 +18,10 @@ Features:
 
 > If Master sends an ACTION code, the slave will execute certain action in the actuators. 
 
-> If Master wants to read some data, it needs to send a DATA_REQUEST code first. This will prepare the data to be sent in the Arduino, and then Master can read() the bus in the Slave's address to get the data. 
+> Whenever there is an status update, the new status will be added to a buffer, to be sent whenever the Master wants to read
 
-> The data send from the Slave will be one of the SLAVE_STATUS messages.
+> If Master wants to read some data, first should read how many items there are in the buffer, writing the codeDATA_REQUEST_STATUS_BUFFER_INDEX first. This will prepare the buffer_lenght to be sent in the Arduino. Then Master can read() the bus in the Slave's address to get the buffer_lenght first. Next read() calls will deliver the data in the buffer, entry by entry 
+
 
 *LIST OF MESSAGES*
 
