@@ -8,6 +8,19 @@ Features:
 2. Read ultrasonic sensors HC-SR04 signals to determine if there are objects at a certain distance
 3. Keypad enabled. The code inserted in the keypad is compared with a saved password
 4. i2c communication enabled. Preapred to receive certain codes to perform some actions
+.
+
+## 2. Multiple Slaves in 1 GW
+When connecting multiple slaves to one RaspPi GW you need to define different HEX address for each slave. To do so, just change the corresponding constant in the Arduino Code
+```
+//i2c CONFIG
+//-----------
+#define SLAVE_ADDRESS 0x04
+```
+
+> *for example from 0x04 to **0x05** or **0x06** or ...* 
+
+When connecting multiple slaves to one RaspPi GW it is important to be sure that the Arduinos have a good power supply. If you use different power supplies for the Arduinos and/or RaspPi GW, make sure all of them share the same GND. Otherwise, I2C communication won't work.
 
 **MESSAGES MAPPING**
 > i2c can send numbers from 0 to 255 in its simplest implementation. 
