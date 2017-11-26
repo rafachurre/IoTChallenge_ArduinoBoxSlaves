@@ -22,7 +22,7 @@ When connecting multiple slaves to one RaspPi GW you need to define different HE
 
 When connecting multiple slaves to one RaspPi GW it is important to be sure that the Arduinos have a good power supply. If you use different power supplies for the Arduinos and/or RaspPi GW, make sure all of them share the same GND. Otherwise, I2C communication won't work.
 
-**MESSAGES MAPPING**
+## 3. MESSAGES MAPPING
 > i2c can send numbers from 0 to 255 in its simplest implementation. 
 
 > The constants below are a collection of messages for the communication between Master <-> Slave. 
