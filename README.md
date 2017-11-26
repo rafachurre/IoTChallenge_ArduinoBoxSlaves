@@ -82,3 +82,12 @@ The code is prepare to simulate the i2c connection with Serial inputs. To use th
 ```
 2. Send ASCII bytes using the Serial monitor. The ideal situation is to use ALT+<codeNumber> to send this number byte. (i.e ALT+100 will send the ACTION_REQUEST_OPEN_BOX to the Arduino.)
 3. To simulate a Master read() send 125 (i.e ALT+125) and the Arduino will write in the Serial monitor the return code.
+  
+  
+# IoTChallenge schematics
+
+Setting this with the [IoTChallenge_GW](https://github.com/rafachurre/IoTChallenge_RaspPiGateway)
+
+.
+
+![](https://raw.githubusercontent.com/rafachurre/IoTChallenge_ArduinoBoxSlaves/master/Arduino_Keypad4x4_Servo_Ultrasounds_schematics_bb.jpg)
