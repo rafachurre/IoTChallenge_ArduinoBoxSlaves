@@ -32,9 +32,13 @@
 #define ACTION_REQUEST_TURN_OFF_LED 78
 #define ACTION_REQUEST_SET_KEYPAD_PWD 79
 
+//MAIN LOOP CONFIG
+//----------------
+#define main_loop_delay 50 // miliseconds delay in the main loop
+
 //i2c CONFIG
 //-----------
-#define SLAVE_ADDRESS 0x05
+#define SLAVE_ADDRESS 0x04
 
 //LED CONFIG
 //-----------
@@ -57,7 +61,7 @@ Servo servoMotor;
 #define numberOfSensors 1 // Number of sensors per Arduino
 #define maximumRange 40 // Maximum range needed
 #define minimumRange 0 // Minimum range needed
-#define emptyThreshold 6 // Opposite wall distance. Cannot be an object further than this distance.
+#define emptyThreshold 5 // Opposite wall distance. Cannot be an object further than this distance.
 
 //Keypad CONFIG
 //--------------
@@ -109,11 +113,18 @@ long duration; // Duration used to calculate distance
 long boxContentDistance; // Distance from the sensors to the object in the box
 int emptySignalCounter = 0;
 
+int emptyFull_safetyCounter = 0;
+int emptyFull_safetyPeriod = 20; // Cycles waiting before safety check
+
 //Loop pending actions
+bool pending_send_status_buffer = false;
 bool pending_openDoor = false;
 bool pending_closeDoor = false;
 bool pending_blinkLed = false;
 bool pending_turnOffLed = false;
+bool pending_updateFullBox = false;
+bool pending_updateEmptyBox = false;
+bool pending_emptyFullSafetyCheck = false;
 
 //Debugging global variables
 //-------------------------
@@ -165,7 +176,7 @@ void loop() {
   //Resolve Pending Actions (if any)
   resolvePendingActions();
   //Delay 50ms before next reading.
-  delay(50);
+  delay(main_loop_delay);
 
   /*
    * UNCOMMENT to enable SerialTesting
@@ -250,7 +261,6 @@ void resolvePendingActions(){
     pushStatusToBuffer(status_OpenClose);
   }
   if(pending_blinkLed){
-    //TODO: BlinkLed() call
     blinkingCounter = 0;
     ledIsBlinking = true;
     pending_blinkLed = false;
@@ -258,11 +268,29 @@ void resolvePendingActions(){
     pushStatusToBuffer(status_LED);
   }
   if(pending_turnOffLed){
-    //TODO: TurnOffLed() call
     turnOffLed();
     pending_turnOffLed = false;
     status_LED = SLAVE_STATUS_LED_OFF;
     pushStatusToBuffer(status_LED);
+  }
+  if(pending_updateFullBox){
+    pending_updateFullBox = false;
+    status_EmptyFull = SLAVE_STATUS_BOX_FULL;
+    pushStatusToBuffer(status_EmptyFull);
+  }
+  if(pending_updateEmptyBox){
+    pending_updateEmptyBox = false;
+    status_EmptyFull = SLAVE_STATUS_BOX_EMPTY;
+    pushStatusToBuffer(status_EmptyFull);
+  }
+  if(pending_emptyFullSafetyCheck){
+    if(emptyFull_safetyCounter >= emptyFull_safetyPeriod){
+      pending_emptyFullSafetyCheck = false;
+      emptyFull_safetyCounter = 0;
+      emptyFullSafetyCheck();
+    } else {
+      emptyFull_safetyCounter += 1;
+    }
   }
 }
 
@@ -302,7 +330,11 @@ void receiveData(int byteCount){
 
 // callback for sending data
 void sendData(){
-  if (status_changed_buffer_index > 0){
+  if(pending_send_status_buffer){
+    pending_send_status_buffer = false;
+    code_toSend = status_changed_buffer_index;
+  }
+  else if (status_changed_buffer_index > 0){
     code_toSend = popFromStatusBuffer();
   }
   else{
@@ -324,7 +356,8 @@ void processReceivedCode(){
       clearStatusBuffer(); // delete all entries in status buffer
     }
     else if(code_received == DATA_REQUEST_STATUS_BUFFER_INDEX){
-      pushStatusToBuffer(status_changed_buffer_index); // push the index to the buffer, to be read in the next i2c_Read()
+      //pushStatusToBuffer(status_changed_buffer_index); // push the index to the buffer, to be read in the next i2c_Read()
+      pending_send_status_buffer = true;
     }
     else if(code_received == DATA_REQUEST_GET_ALL_STATUSES){
       //Prepare all statuses to be read
@@ -450,6 +483,10 @@ void checkEmptyFull(){
   emptyCheck();
 }
 
+void emptyFullSafetyCheck(){
+  pushStatusToBuffer(status_EmptyFull);
+}
+
 void distanceSensorCheck(int trigPin, int echoPin){
   /*  The following trigPin/echoPin cycle is used to determine the 
    *  distance of the nearest object by bouncing soundwaves off of it. */ 
@@ -472,7 +509,14 @@ void distanceSensorCheck(int trigPin, int echoPin){
   else {
     /* Send the distance to the computer using Serial protocol */
     if(boxContentDistance < emptyThreshold){
-      status_EmptyFull = SLAVE_STATUS_BOX_FULL;
+      if (status_EmptyFull != SLAVE_STATUS_BOX_FULL){
+        //pending_updateFullBox = true;
+        status_EmptyFull = SLAVE_STATUS_BOX_FULL;
+        
+        //Set emptyFullSafetyCheck variables
+        pending_emptyFullSafetyCheck = true;
+        emptyFull_safetyCounter = 0;
+      }
       emptySignalCounter = 0; // if one sensor detects an object -> 0
     }
     else {
@@ -484,7 +528,14 @@ void distanceSensorCheck(int trigPin, int echoPin){
 //Empty box only if all sensors says "empty box"
 void emptyCheck(){
   if(emptySignalCounter >= numberOfSensors){
-    status_EmptyFull = SLAVE_STATUS_BOX_EMPTY;
+    if (status_EmptyFull != SLAVE_STATUS_BOX_EMPTY){
+      //pending_updateEmptyBox = true;
+      status_EmptyFull = SLAVE_STATUS_BOX_EMPTY;
+      
+      //Set emptyFullSafetyCheck variables
+      pending_emptyFullSafetyCheck = true;
+      emptyFull_safetyCounter = 0;
+    }
     emptySignalCounter = 0;
   }
 }
